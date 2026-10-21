@@ -1,0 +1,336 @@
+# Evaluation set: natural-language questions with gold SQL.
+#
+# Scoring = EXECUTION ACCURACY: the generated SQL and the gold SQL are both run,
+# and the result sets are compared (values rounded to 2 dp, column names and
+# column order ignored, row order only checked when order_matters is true).
+# All dates are relative to now(), so the set stays valid as the data ages.
+#
+# difficulty: easy (1 table) | medium (joins / grouping) | hard (time windows, CTEs, ratios, multi-hop joins)
+version: 1
+role: admin   # run as admin so every table is in scope; RBAC is tested separately
+questions:
+  # ------------------------------------------------------------------ easy
+  - id: E01
+    difficulty: easy
+    question: How many customers do we have?
+    sql: SELECT COUNT(*) FROM customers
+  - id: E02
+    difficulty: easy
+    question: How many active customers are there?
+    sql: SELECT COUNT(*) FROM customers WHERE status = 'active'
+  - id: E03
+    difficulty: easy
+    question: How many customers are in each segment?
+    sql: SELECT segment, COUNT(*) FROM customers GROUP BY segment
+  - id: E04
+    difficulty: easy
+    question: How many customers do we have in each region?
+    sql: SELECT region, COUNT(*) FROM customers GROUP BY region
+  - id: E05
+    difficulty: easy
+    question: How many orders have been cancelled?
+    sql: SELECT COUNT(*) FROM orders WHERE status = 'cancelled'
+  - id: E06
+    difficulty: easy
+    question: What is our total revenue of all time?
+    sql: SELECT ROUND(SUM(total_amount), 2) FROM orders WHERE status <> 'cancelled'
+  - id: E07
+    difficulty: easy
+    question: What is the average order value?
+    sql: SELECT ROUND(AVG(total_amount), 2) FROM orders WHERE status <> 'cancelled'
+  - id: E08
+    difficulty: easy
+    question: How many orders are in each status?
+    sql: SELECT status, COUNT(*) FROM orders GROUP BY status
+  - id: E09
+    difficulty: easy
+    question: List the 5 most expensive products by list price.
+    order_matters: true
+    sql: SELECT name, unit_price FROM products ORDER BY unit_price DESC LIMIT 5
+  - id: E10
+    difficulty: easy
+    question: How many products are discontinued?
+    sql: SELECT COUNT(*) FROM products WHERE is_active = false
+  - id: E11
+    difficulty: easy
+    question: How many invoices are overdue?
+    sql: SELECT COUNT(*) FROM invoices WHERE status = 'overdue'
+  - id: E12
+    difficulty: easy
+    question: What is the total amount of overdue invoices?
+    sql: SELECT ROUND(SUM(amount), 2) FROM invoices WHERE status = 'overdue'
+  - id: E13
+    difficulty: easy
+    question: How much money has been collected in total for each payment method?
+    sql: SELECT method, ROUND(SUM(amount), 2) FROM payments GROUP BY method
+  - id: E14
+    difficulty: easy
+    question: How many active employees do we have?
+    sql: SELECT COUNT(*) FROM employees WHERE is_active = true
+  - id: E15
+    difficulty: easy
+    question: Which hardware products have fewer than 50 units in stock?
+    sql: >
+      SELECT p.name, p.stock_quantity FROM products p JOIN product_categories c USING (category_id)
+      WHERE c.name = 'Hardware' AND p.stock_quantity < 50
+  - id: E16
+    difficulty: easy
+    question: How many customers are in each industry?
+    sql: SELECT industry, COUNT(*) FROM customers GROUP BY industry
+  - id: E17
+    difficulty: easy
+    question: How many customers have churned?
+    sql: SELECT COUNT(*) FROM customers WHERE status = 'churned'
+  - id: E18
+    difficulty: easy
+    question: What is the total value of unpaid invoices?
+    sql: SELECT ROUND(SUM(amount), 2) FROM invoices WHERE status IN ('sent', 'overdue')
+  # ---------------------------------------------------------------- medium
+  - id: M01
+    difficulty: medium
+    question: Top 10 customers by revenue.
+    order_matters: true
+    sql: >
+      SELECT c.company_name, ROUND(SUM(o.total_amount), 2) AS revenue FROM orders o JOIN customers c USING (customer_id)
+      WHERE o.status <> 'cancelled' GROUP BY c.customer_id, c.company_name ORDER BY revenue DESC LIMIT 10
+  - id: M02
+    difficulty: medium
+    question: What is the total revenue by customer segment?
+    sql: >
+      SELECT c.segment, ROUND(SUM(o.total_amount), 2) FROM orders o JOIN customers c USING (customer_id)
+      WHERE o.status <> 'cancelled' GROUP BY c.segment
+  - id: M03
+    difficulty: medium
+    question: Revenue by region.
+    sql: >
+      SELECT c.region, ROUND(SUM(o.total_amount), 2) FROM orders o JOIN customers c USING (customer_id)
+      WHERE o.status <> 'cancelled' GROUP BY c.region
+  - id: M04
+    difficulty: medium
+    question: What are the 5 best-selling products by units sold?
+    order_matters: true
+    sql: >
+      SELECT p.name, SUM(oi.quantity) AS units FROM order_items oi JOIN products p USING (product_id)
+      JOIN orders o USING (order_id) WHERE o.status <> 'cancelled'
+      GROUP BY p.product_id, p.name ORDER BY units DESC LIMIT 5
+  - id: M05
+    difficulty: medium
+    question: What is the sales revenue by product category, based on order line totals?
+    sql: >
+      SELECT pc.name, ROUND(SUM(oi.line_total), 2) FROM order_items oi JOIN products p USING (product_id)
+      JOIN product_categories pc USING (category_id) JOIN orders o USING (order_id)
+      WHERE o.status <> 'cancelled' GROUP BY pc.name
+  - id: M06
+    difficulty: medium
+    question: How many employees are in each department?
+    sql: SELECT d.name, COUNT(*) FROM employees e JOIN departments d USING (department_id) GROUP BY d.name
+  - id: M07
+    difficulty: medium
+    question: What is the average salary by department?
+    sql: >
+      SELECT d.name, ROUND(AVG(e.salary), 2) FROM employees e JOIN departments d USING (department_id) GROUP BY d.name
+  - id: M08
+    difficulty: medium
+    question: Which 5 customers owe us the most in unpaid invoices?
+    order_matters: true
+    sql: >
+      SELECT c.company_name, ROUND(SUM(i.amount), 2) AS outstanding FROM invoices i JOIN customers c USING (customer_id)
+      WHERE i.status IN ('sent', 'overdue') GROUP BY c.customer_id, c.company_name ORDER BY outstanding DESC LIMIT 5
+  - id: M09
+    difficulty: medium
+    question: How many orders has each customer segment placed?
+    sql: SELECT c.segment, COUNT(*) FROM orders o JOIN customers c USING (customer_id) GROUP BY c.segment
+  - id: M10
+    difficulty: medium
+    question: What is the average order value for each customer segment?
+    sql: >
+      SELECT c.segment, ROUND(AVG(o.total_amount), 2) FROM orders o JOIN customers c USING (customer_id)
+      WHERE o.status <> 'cancelled' GROUP BY c.segment
+  - id: M11
+    difficulty: medium
+    question: Which 5 sales reps generated the most revenue? Show their full names.
+    order_matters: true
+    sql: >
+      SELECT e.first_name || ' ' || e.last_name AS rep, ROUND(SUM(o.total_amount), 2) AS revenue
+      FROM orders o JOIN employees e ON e.employee_id = o.sales_rep_id WHERE o.status <> 'cancelled'
+      GROUP BY e.employee_id, rep ORDER BY revenue DESC LIMIT 5
+  - id: M12
+    difficulty: medium
+    question: How many customers does each account manager handle? Show the top 5 with full names.
+    order_matters: true
+    sql: >
+      SELECT e.first_name || ' ' || e.last_name AS manager, COUNT(*) AS customers
+      FROM customers c JOIN employees e ON e.employee_id = c.account_manager_id
+      GROUP BY e.employee_id, manager ORDER BY customers DESC, manager LIMIT 5
+  - id: M13
+    difficulty: medium
+    question: How many products are in each category?
+    sql: SELECT pc.name, COUNT(*) FROM products p JOIN product_categories pc USING (category_id) GROUP BY pc.name
+  - id: M14
+    difficulty: medium
+    question: What is the total revenue from customers in Germany?
+    sql: >
+      SELECT ROUND(SUM(o.total_amount), 2) FROM orders o JOIN customers c USING (customer_id)
+      WHERE c.country = 'Germany' AND o.status <> 'cancelled'
+  - id: M15
+    difficulty: medium
+    question: Which 3 countries generate the most revenue?
+    order_matters: true
+    sql: >
+      SELECT c.country, ROUND(SUM(o.total_amount), 2) AS revenue FROM orders o JOIN customers c USING (customer_id)
+      WHERE o.status <> 'cancelled' GROUP BY c.country ORDER BY revenue DESC LIMIT 3
+  - id: M16
+    difficulty: medium
+    question: How many invoices are there in each status?
+    sql: SELECT status, COUNT(*) FROM invoices GROUP BY status
+  - id: M17
+    difficulty: medium
+    question: Which industry has the highest total revenue?
+    sql: >
+      SELECT c.industry FROM orders o JOIN customers c USING (customer_id) WHERE o.status <> 'cancelled'
+      GROUP BY c.industry ORDER BY SUM(o.total_amount) DESC LIMIT 1
+  - id: M18
+    difficulty: medium
+    question: How many distinct customers have at least one overdue invoice?
+    sql: SELECT COUNT(DISTINCT customer_id) FROM invoices WHERE status = 'overdue'
+  - id: M19
+    difficulty: medium
+    question: What is the total units sold for each product category?
+    sql: >
+      SELECT pc.name, SUM(oi.quantity) FROM order_items oi JOIN products p USING (product_id)
+      JOIN product_categories pc USING (category_id) JOIN orders o USING (order_id)
+      WHERE o.status <> 'cancelled' GROUP BY pc.name
+  - id: M20
+    difficulty: medium
+    question: Which 5 products have the highest margin per unit (list price minus cost)?
+    order_matters: true
+    sql: SELECT name, unit_price - unit_cost AS margin FROM products ORDER BY margin DESC LIMIT 5
+  # ------------------------------------------------------------------ hard
+  - id: H01
+    difficulty: hard
+    question: Top 10 customers by revenue last quarter.
+    order_matters: true
+    sql: >
+      SELECT c.company_name, ROUND(SUM(o.total_amount), 2) AS revenue FROM orders o JOIN customers c USING (customer_id)
+      WHERE o.status <> 'cancelled'
+        AND o.order_date >= date_trunc('quarter', now()) - interval '3 months'
+        AND o.order_date < date_trunc('quarter', now())
+      GROUP BY c.customer_id, c.company_name ORDER BY revenue DESC LIMIT 10
+  - id: H02
+    difficulty: hard
+    question: What was our total revenue last quarter?
+    sql: >
+      SELECT ROUND(SUM(total_amount), 2) FROM orders WHERE status <> 'cancelled'
+        AND order_date >= date_trunc('quarter', now()) - interval '3 months' AND order_date < date_trunc('quarter', now())
+  - id: H03
+    difficulty: hard
+    question: Show monthly revenue for the last 12 months.
+    order_matters: true
+    sql: >
+      SELECT date_trunc('month', order_date) AS month, ROUND(SUM(total_amount), 2) FROM orders
+      WHERE status <> 'cancelled' AND order_date >= date_trunc('month', now()) - interval '11 months'
+      GROUP BY month ORDER BY month
+  - id: H04
+    difficulty: hard
+    question: What is the revenue for each year?
+    order_matters: true
+    sql: >
+      SELECT EXTRACT(YEAR FROM order_date) AS year, ROUND(SUM(total_amount), 2) FROM orders
+      WHERE status <> 'cancelled' GROUP BY year ORDER BY year
+  - id: H05
+    difficulty: hard
+    question: How much revenue have we made so far this year?
+    sql: >
+      SELECT ROUND(SUM(total_amount), 2) FROM orders WHERE status <> 'cancelled' AND order_date >= date_trunc('year', now())
+  - id: H06
+    difficulty: hard
+    question: How many new customers signed up in each of the last 6 months?
+    order_matters: true
+    sql: >
+      SELECT date_trunc('month', created_at) AS month, COUNT(*) FROM customers
+      WHERE created_at >= date_trunc('month', now()) - interval '5 months' GROUP BY month ORDER BY month
+  - id: H07
+    difficulty: hard
+    question: How many orders were placed in the last 30 days?
+    sql: SELECT COUNT(*) FROM orders WHERE order_date >= now() - interval '30 days'
+  - id: H08
+    difficulty: hard
+    question: Which active customers have not placed an order in the last 180 days? Give the count.
+    sql: >
+      SELECT COUNT(*) FROM customers c WHERE c.status = 'active' AND NOT EXISTS (
+        SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id AND o.order_date >= now() - interval '180 days')
+  - id: H09
+    difficulty: hard
+    question: What percentage of all orders were cancelled?
+    sql: SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'cancelled') / COUNT(*), 2) FROM orders
+  - id: H10
+    difficulty: hard
+    question: What is the average number of days between invoice issue date and payment date for paid invoices?
+    sql: SELECT ROUND(AVG(paid_date - issue_date), 2) FROM invoices WHERE status = 'paid'
+  - id: H11
+    difficulty: hard
+    question: Which product category had the highest revenue from order line totals last quarter?
+    sql: >
+      SELECT pc.name FROM order_items oi JOIN orders o USING (order_id) JOIN products p USING (product_id)
+      JOIN product_categories pc USING (category_id)
+      WHERE o.status <> 'cancelled'
+        AND o.order_date >= date_trunc('quarter', now()) - interval '3 months' AND o.order_date < date_trunc('quarter', now())
+      GROUP BY pc.name ORDER BY SUM(oi.line_total) DESC LIMIT 1
+  - id: H12
+    difficulty: hard
+    question: Which customers have outstanding unpaid invoices above their credit limit? Give the count.
+    sql: >
+      SELECT COUNT(*) FROM (SELECT c.customer_id FROM customers c JOIN invoices i USING (customer_id)
+        WHERE i.status IN ('sent', 'overdue') GROUP BY c.customer_id, c.credit_limit
+        HAVING SUM(i.amount) > c.credit_limit) t
+  - id: H13
+    difficulty: hard
+    question: Show quarterly revenue for the current year and the previous year.
+    order_matters: true
+    sql: >
+      SELECT date_trunc('quarter', order_date) AS quarter, ROUND(SUM(total_amount), 2) FROM orders
+      WHERE status <> 'cancelled' AND order_date >= date_trunc('year', now()) - interval '1 year'
+      GROUP BY quarter ORDER BY quarter
+  - id: H14
+    difficulty: hard
+    question: Which sales region has the most revenue per customer?
+    sql: >
+      SELECT c.region FROM orders o JOIN customers c USING (customer_id) WHERE o.status <> 'cancelled'
+      GROUP BY c.region ORDER BY SUM(o.total_amount) / COUNT(DISTINCT c.customer_id) DESC LIMIT 1
+  - id: H15
+    difficulty: hard
+    question: What share of total revenue comes from Enterprise customers, as a percentage?
+    sql: >
+      SELECT ROUND(100.0 * SUM(o.total_amount) FILTER (WHERE c.segment = 'Enterprise') / SUM(o.total_amount), 2)
+      FROM orders o JOIN customers c USING (customer_id) WHERE o.status <> 'cancelled'
+  - id: H16
+    difficulty: hard
+    question: How many customers have placed more than 20 orders?
+    sql: >
+      SELECT COUNT(*) FROM (SELECT customer_id FROM orders GROUP BY customer_id HAVING COUNT(*) > 20) t
+  - id: H17
+    difficulty: hard
+    question: What is the total gross profit (line totals minus unit cost times quantity) on non-cancelled orders?
+    sql: >
+      SELECT ROUND(SUM(oi.line_total - p.unit_cost * oi.quantity), 2) FROM order_items oi
+      JOIN products p USING (product_id) JOIN orders o USING (order_id) WHERE o.status <> 'cancelled'
+  - id: H18
+    difficulty: hard
+    question: Which 3 customers placed the most orders in the last 90 days?
+    order_matters: true
+    sql: >
+      SELECT c.company_name, COUNT(*) AS orders FROM orders o JOIN customers c USING (customer_id)
+      WHERE o.order_date >= now() - interval '90 days' GROUP BY c.customer_id, c.company_name
+      ORDER BY orders DESC, c.company_name LIMIT 3
+  - id: H19
+    difficulty: hard
+    question: What is the total amount paid by customers in the Healthcare industry?
+    sql: >
+      SELECT ROUND(SUM(p.amount), 2) FROM payments p JOIN invoices i USING (invoice_id)
+      JOIN customers c ON c.customer_id = i.customer_id WHERE c.industry = 'Healthcare'
+  - id: H20
+    difficulty: hard
+    question: Which department has the highest total salary cost?
+    sql: >
+      SELECT d.name FROM employees e JOIN departments d USING (department_id) GROUP BY d.name
+      ORDER BY SUM(e.salary) DESC LIMIT 1

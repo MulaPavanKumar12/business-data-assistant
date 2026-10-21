@@ -1,0 +1,5 @@
+# Shell scripts run inside Linux containers: they must keep LF line endings,
+# even when the repo is checked out on Windows.
+*.sh text eol=lf
+*.sql text eol=lf
+Dockerfile text eol=lf

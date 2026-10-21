@@ -1,0 +1,102 @@
+# docker-compose.yml - one command brings up the whole stack:
+#   docker compose up --build
+#
+#   db        PostgreSQL 16 with schema + read-only role (db/init runs on first start)
+#   seed      one-shot job that fills the database with deterministic fake data
+#   api       FastAPI backend   -> http://localhost:8000/docs
+#   frontend  Streamlit chat UI -> http://localhost:8501
+#
+# Values come from .env if present, otherwise the defaults after ":-".
+
+x-db-env: &db-env
+  POSTGRES_DB: ${POSTGRES_DB:-business_db}
+  POSTGRES_USER: ${POSTGRES_USER:-bda_admin}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_admin}
+  READONLY_DB_USER: ${READONLY_DB_USER:-bda_readonly}
+  READONLY_DB_PASSWORD: ${READONLY_DB_PASSWORD:-change_me_readonly}
+
+x-app-env: &app-env
+  <<: *db-env
+  DB_HOST: db
+  POSTGRES_PORT: "5432"   # port INSIDE the docker network, not the host port
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SEED_RANDOM_SEED: ${SEED_RANDOM_SEED:-42}
+  SEED_NUM_CUSTOMERS: ${SEED_NUM_CUSTOMERS:-500}
+  SEED_NUM_EMPLOYEES: ${SEED_NUM_EMPLOYEES:-60}
+  SEED_NUM_PRODUCTS: ${SEED_NUM_PRODUCTS:-120}
+  SEED_NUM_ORDERS: ${SEED_NUM_ORDERS:-5000}
+  LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_EFFORT: ${LLM_EFFORT:-low}
+  LLM_ENABLE_FALLBACKS: ${LLM_ENABLE_FALLBACKS:-true}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+  RAG_BACKEND: ${RAG_BACKEND:-hybrid}
+  MAX_RESULT_ROWS: ${MAX_RESULT_ROWS:-200}
+  JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-to-a-long-random-string}
+  DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-demo123}
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+  BUSINESS_API_URL: http://localhost:8000/internal/v1   # the API calls its own internal routes
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bda-db
+    environment: *db-env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -h localhost: the temporary server used while init scripts run does not
+      # listen on TCP, so the check only passes once schema + roles are ready.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  seed:
+    build: ./backend
+    image: bda-backend:latest
+    container_name: bda-seed
+    command: ["python", "-m", "app.seed", "--if-empty"]
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: ./backend
+    image: bda-backend:latest
+    container_name: bda-api
+    environment: *app-env
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: bda-frontend
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "${UI_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: business_db
+          POSTGRES_USER: bda_admin
+          POSTGRES_PASSWORD: change_me_admin
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bda_admin -d business_db"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPASSWORD: change_me_admin
+      POSTGRES_USER: bda_admin
+      POSTGRES_DB: business_db
+      READONLY_DB_PASSWORD: change_me_readonly
+      RAG_BACKEND: keyword
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+      - name: Lint
+        run: ruff check . && ruff format --check .
+      - name: Create schema and read-only role
+        run: |
+          psql -v ON_ERROR_STOP=1 -U bda_admin -d business_db -f db/init/01_schema.sql
+          bash db/init/02_readonly_role.sh
+      - name: Seed data
+        working-directory: backend
+        run: python -m app.seed --if-empty
+      - name: Tests (unit + integration + red-team)
+        run: pytest -q
+      - name: Evaluation harness self-check (gold SQL, no API key needed)
+        working-directory: backend
+        run: python -m eval.run_eval --oracle
+      - name: Live LLM evaluation (only if a key is configured)
+        if: env.ANTHROPIC_API_KEY != ''
+        working-directory: backend
+        run: python -m eval.run_eval

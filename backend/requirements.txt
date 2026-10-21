@@ -1,0 +1,15 @@
+# Runtime dependencies
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+psycopg[binary]==3.2.3
+pydantic-settings==2.7.0
+Faker==33.1.0
+httpx==0.28.1
+# Text-to-SQL, RAG and LLM providers
+sqlglot==25.34.1
+chromadb==0.5.23
+anthropic==1.17.0
+openai==1.58.1
+# Security, evaluation
+PyJWT==2.10.1
+PyYAML==6.0.2

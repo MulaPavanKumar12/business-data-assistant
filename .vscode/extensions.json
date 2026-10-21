@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "charliermarsh.ruff",
+    "ms-azuretools.vscode-docker",
+    "bierner.markdown-mermaid",
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-pg"
+  ]
+}

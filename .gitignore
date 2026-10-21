@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+chroma_data/
+*.log
+.DS_Store
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json

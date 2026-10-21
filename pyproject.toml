@@ -1,0 +1,30 @@
+[project]
+name = "business-data-assistant"
+version = "1.0.0"
+description = "Natural-language assistant for business data: Text-to-SQL, schema RAG, API agent, guardrails."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+markers = [
+    "integration: needs a running PostgreSQL (docker compose up db seed)",
+]
+addopts = "-ra"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::pydantic.warnings.PydanticDeprecatedSince211",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["backend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101", "S311", "E501"]  # asserts in tests; random is fine for fake data; `ruff format` handles line length (long prompt strings allowed)
+
+[tool.ruff.lint.per-file-ignores]
+
+"backend/tests/*" = ["S106"]              # dummy passwords in tests
